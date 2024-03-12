@@ -159,16 +159,22 @@ create_partitions() {
     parted -s "$root_drive" mkpart primary linux-swap ${efi_size}GiB $((efi_size + swap_size))GiB
     ((partition_index++))
 
-    # Home partition
-    home_size=$(get_partition_size "Home" "")
-    echo "Creating Home partition..."
-    home_part="${root_drive}p${partition_index}"
-    parted -s "$root_drive" mkpart primary ext4 $((efi_size + swap_size))GiB $((efi_size + swap_size + home_size))GiB
-    ((partition_index++))
+    # Home partition (if separate_home is 1)
+    if [ "$separate_home" == 1 ]; then
+        home_size=$(get_partition_size "Home" "")
+        echo "Creating Home partition..."
+        home_part="${root_drive}p${partition_index}"
+        parted -s "$root_drive" mkpart primary ext4 $((efi_size + swap_size))GiB $((efi_size + swap_size + home_size))GiB
+        ((partition_index++))
+    fi
+
+    # Calculate available space for the root partition
+    root_size=$(( $(lsblk -bdno SIZE "$root_drive") / (1024 * 1024 * 1024) ))  # in GB
+    available_space=$((root_size - efi_size - swap_size - home_size))
 
     # Root partition (rest of the drive)
-    root_size=$(( $(lsblk -bdno SIZE "$root_drive") / (1024 * 1024 * 1024) ))  # in GB
     root_part="${root_drive}p${partition_index}"
+    root_size=$(get_partition_size "Root" "" $available_space)
     echo "Creating Root partition..."
     parted -s "$root_drive" mkpart primary ext4 $((efi_size + swap_size + home_size))GiB 100%
 }
